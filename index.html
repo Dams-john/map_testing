@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Where Am I</title>
+<title>checking......</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
 <style>
   :root {
@@ -125,6 +125,13 @@
     margin-bottom: 4px;
   }
 
+  .street-row {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0 24px;
+    align-items: baseline;
+  }
+
   .street-name {
     font-size: 26px;
     font-weight: 700;
@@ -194,8 +201,16 @@
 
       <div class="result" id="result">
         <div class="street-block">
-          <label>STREET</label>
-          <p class="street-name" id="streetName">—</p>
+          <div class="street-row">
+            <div>
+              <label>STREET NUMBER</label>
+              <p class="street-name" id="streetNumber">—</p>
+            </div>
+            <div>
+              <label>STREET NAME</label>
+              <p class="street-name" id="streetName">—</p>
+            </div>
+          </div>
           <p class="full-address" id="fullAddress"></p>
         </div>
 
@@ -229,6 +244,7 @@
     const btn = document.getElementById('locate');
     const statusEl = document.getElementById('status');
     const resultEl = document.getElementById('result');
+    const streetNumberEl = document.getElementById('streetNumber');
     const streetNameEl = document.getElementById('streetName');
     const fullAddressEl = document.getElementById('fullAddress');
     const latEl = document.getElementById('lat');
@@ -267,7 +283,10 @@
         if (!res.ok) continue;
         const data = await res.json();
         const street = extractStreetFromNominatim(data);
-        if (street) return { street, full: data.display_name || null, raw: data };
+        if (street) {
+          const houseNumber = data.address.house_number || null;
+          return { street, houseNumber, full: data.display_name || null, raw: data };
+        }
       }
       return null;
     }
@@ -286,9 +305,10 @@
       if (!res.ok) return null;
       const data = await res.json();
       const street = data.street || null;
+      const houseNumber = data.streetNumber || null;
       const parts = [data.locality, data.city, data.principalSubdivision].filter(Boolean);
       const full = [data.street, ...parts].filter(Boolean).join(', ');
-      return street ? { street, full, raw: data } : null;
+      return street ? { street, houseNumber, full, raw: data } : null;
     }
 
     btn.addEventListener('click', () => {
@@ -323,9 +343,11 @@
           }
 
           if (hit) {
+            streetNumberEl.textContent = hit.houseNumber || '—';
             streetNameEl.textContent = hit.street;
             fullAddressEl.textContent = hit.full || '';
           } else {
+            streetNumberEl.textContent = '—';
             streetNameEl.textContent = 'No street matched at these coordinates';
             fullAddressEl.textContent = 'Try again outdoors or somewhere with a stronger signal — indoor Wi-Fi positioning is often too imprecise to match a street.';
           }
