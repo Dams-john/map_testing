@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>checking......</title>
+<title>checking A.......</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
 <style>
   :root {
@@ -277,7 +277,7 @@
     // Try Nominatim at a couple of zoom levels, since narrower zoom sometimes
     // drops the road tag on rural or newly-mapped streets.
     async function nominatimLookup(lat, lon) {
-      for (const zoom of [18, 17, 16]) {
+      for (const zoom of [19, 18, 17, 16, 15]) {
         const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=${zoom}&addressdetails=1`;
         const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
         if (!res.ok) continue;
@@ -311,6 +311,47 @@
       return street ? { street, houseNumber, full, raw: data } : null;
     }
 
+    function haversineMeters(lat1, lon1, lat2, lon2) {
+      const R = 6371000;
+      const toRad = (d) => (d * Math.PI) / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(a));
+    }
+
+    // Last-resort fallback — instead of asking a database "what's the address at
+    // this exact point" (which fails if no address was ever tagged nearby), this
+    // asks a map query "what's the nearest named road", widening the search
+    // radius until it finds one. Doesn't return a house number, since road
+    // geometries don't carry those, but almost always finds a street name.
+    async function overpassLookup(lat, lon) {
+      const radii = [30, 75, 150, 300, 600];
+      for (const r of radii) {
+        const query = `[out:json][timeout:10];way(around:${r},${lat},${lon})["highway"]["name"];out tags center;`;
+        const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+        try {
+          const res = await fetch(url);
+          if (!res.ok) continue;
+          const data = await res.json();
+          if (!data.elements || !data.elements.length) continue;
+
+          let best = null;
+          let bestDist = Infinity;
+          for (const el of data.elements) {
+            if (!el.tags || !el.tags.name || !el.center) continue;
+            const d = haversineMeters(lat, lon, el.center.lat, el.center.lon);
+            if (d < bestDist) { bestDist = d; best = el; }
+          }
+          if (best) {
+            return { street: best.tags.name, houseNumber: null, full: null, distance: Math.round(bestDist) };
+          }
+        } catch (e) { /* widen radius and try again */ }
+      }
+      return null;
+    }
+
     btn.addEventListener('click', () => {
       if (!('geolocation' in navigator)) {
         setStatus('This browser doesn\'t support location access.', true);
@@ -339,17 +380,31 @@
           if (!hit) {
             try {
               hit = await bigDataCloudLookup(latitude, longitude);
-            } catch (e) { /* both failed */ }
+            } catch (e) { /* try next fallback */ }
+          }
+
+          if (!hit) {
+            try {
+              hit = await overpassLookup(latitude, longitude);
+            } catch (e) { /* all providers failed */ }
           }
 
           if (hit) {
             streetNumberEl.textContent = hit.houseNumber || '—';
             streetNameEl.textContent = hit.street;
-            fullAddressEl.textContent = hit.full || '';
+            if (hit.full) {
+              fullAddressEl.textContent = hit.full;
+            } else if (hit.distance !== undefined) {
+              fullAddressEl.textContent = `Nearest named road, ~${hit.distance} m away — no exact address point mapped here.`;
+            } else {
+              fullAddressEl.textContent = '';
+            }
           } else {
             streetNumberEl.textContent = '—';
             streetNameEl.textContent = 'No street matched at these coordinates';
-            fullAddressEl.textContent = 'Try again outdoors or somewhere with a stronger signal — indoor Wi-Fi positioning is often too imprecise to match a street.';
+            fullAddressEl.textContent = accuracy > 100
+              ? `Your location is only accurate to ~${Math.round(accuracy)} m, which is likely too imprecise to match a street. Try again on a device with GPS, outdoors.`
+              : 'This spot may be off the road network entirely (a field, courtyard, or building interior) with no named way nearby.';
           }
 
           resultEl.classList.add('show');
