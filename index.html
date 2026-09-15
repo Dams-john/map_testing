@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>checking A.......</title>
+<title>checking</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
 <style>
   :root {
@@ -274,11 +274,18 @@
       setTimeout(() => map.invalidateSize(), 50);
     }
 
+    // Nominatim's usage policy caps requests at ~1/sec — a short pause between
+    // zoom attempts avoids getting rate-limited (which would silently look like
+    // "no street found" rather than a rate-limit error).
+    function delay(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
     // Try Nominatim at a couple of zoom levels, since narrower zoom sometimes
     // drops the road tag on rural or newly-mapped streets.
     async function nominatimLookup(lat, lon) {
-      for (const zoom of [19, 18, 17, 16, 15]) {
-        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=${zoom}&addressdetails=1`;
+      const zooms = [19, 18, 17, 16, 15];
+      for (let i = 0; i < zooms.length; i++) {
+        if (i > 0) await delay(350);
+        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=${zooms[i]}&addressdetails=1`;
         const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
         if (!res.ok) continue;
         const data = await res.json();
@@ -295,7 +302,9 @@
       if (!data || !data.address) return null;
       const a = data.address;
       return a.road || a.pedestrian || a.footway || a.residential ||
-             a.cycleway || a.path || a.street || a.living_street || null;
+             a.cycleway || a.path || a.street || a.living_street ||
+             a.track || a.service || a.motorway || a.trunk ||
+             a.primary || a.secondary || a.tertiary || a.unclassified || null;
     }
 
     // Fallback provider — no API key, CORS-friendly, often fills gaps Nominatim misses.
