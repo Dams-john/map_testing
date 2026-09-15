@@ -1,98 +1,354 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Google Map Clone (No Credit Card)</title>
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <style>
-        #map { 
-            height: 450px; 
-            width: 100%; 
-            border-radius: 8px;
-            margin-top: 10px;
-        }
-        .form-group { margin-top: 15px; }
-        input[type="text"] { width: 100%; padding: 8px; box-sizing: border-box; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Where Am I</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+<style>
+  :root {
+    --ink: #14201d;
+    --navy: #1c2b33;
+    --teal: #3d6b6b;
+    --sand: #e8dcc8;
+    --paper: #f7f4ee;
+    --coral: #c1502e;
+    --line: rgba(20, 32, 29, 0.14);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--navy);
+    color: var(--paper);
+    font-family: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+    min-height: 100vh;
+  }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 20px;
+  }
+
+  .card {
+    width: 100%;
+    max-width: 480px;
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 30px 60px -20px rgba(0,0,0,0.5);
+  }
+
+  .card__top {
+    padding: 36px 32px 28px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .kicker {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    color: var(--teal);
+    margin: 0 0 10px;
+  }
+
+  h1 {
+    font-size: 30px;
+    line-height: 1.15;
+    margin: 0 0 12px;
+    font-weight: 600;
+    max-width: 22ch;
+  }
+
+  p.lede {
+    font-size: 15px;
+    line-height: 1.55;
+    color: #454f4c;
+    margin: 0;
+    max-width: 34ch;
+  }
+
+  .card__body {
+    padding: 28px 32px 32px;
+  }
+
+  button#locate {
+    width: 100%;
+    border: none;
+    background: var(--coral);
+    color: var(--paper);
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 15px 18px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+
+  button#locate:hover { background: #a8431f; }
+  button#locate:active { transform: scale(0.98); }
+  button#locate:disabled { background: #b9b3a5; cursor: wait; }
+
+  .status {
+    margin-top: 16px;
+    font-size: 13.5px;
+    color: #6b6459;
+    min-height: 18px;
+    line-height: 1.5;
+  }
+
+  .status.error { color: var(--coral); }
+
+  .result {
+    margin-top: 24px;
+    display: none;
+  }
+
+  .result.show { display: block; }
+
+  .street-block {
+    margin-bottom: 18px;
+  }
+
+  .street-block label {
+    display: block;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    letter-spacing: 0.02em;
+    color: var(--teal);
+    margin-bottom: 4px;
+  }
+
+  .street-name {
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1.2;
+    margin: 0;
+  }
+
+  .full-address {
+    font-size: 14px;
+    color: #6b6459;
+    margin: 6px 0 0;
+    line-height: 1.5;
+  }
+
+  #map {
+    height: 220px;
+    width: 100%;
+    border-radius: 3px;
+    margin: 16px 0 18px;
+    border: 1px solid var(--line);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+  }
+
+  .field label {
+    display: block;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    color: #8a8377;
+    margin-bottom: 3px;
+  }
+
+  .field .value {
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    color: var(--ink);
+  }
+
+  .note {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: #8a8377;
+  }
+</style>
 </head>
 <body>
 
-    <h2>Select Location</h2>
+  <div class="card">
+    <div class="card__top">
+      <p class="kicker">GEOLOCATION</p>
+      <h1>Find the street you're standing on</h1>
+      <p class="lede">Uses your browser's location permission, then looks up the nearest street. Nothing is stored — the lookup happens live in this tab.</p>
+    </div>
 
-    <!-- Interactive Map Container -->
-    <div id="map"></div>
+    <div class="card__body">
+      <button id="locate">Detect my location</button>
+      <div class="status" id="status"></div>
 
-    <!-- Form to send coordinates to your PHP backend -->
-    <form action="save_location.php" method="POST">
-        <div class="form-group">
-            <label>Latitude:</label>
-            <input type="text" id="lat" name="latitude" readonly required>
+      <div class="result" id="result">
+        <div class="street-block">
+          <label>STREET</label>
+          <p class="street-name" id="streetName">—</p>
+          <p class="full-address" id="fullAddress"></p>
         </div>
-        <div class="form-group">
-            <label>Longitude:</label>
-            <input type="text" id="lng" name="longitude" readonly required>
+
+        <div id="map"></div>
+
+        <div class="grid">
+          <div class="field">
+            <label>LATITUDE</label>
+            <div class="value" id="lat">—</div>
+          </div>
+          <div class="field">
+            <label>LONGITUDE</label>
+            <div class="value" id="lng">—</div>
+          </div>
+          <div class="field">
+            <label>ACCURACY</label>
+            <div class="value" id="acc">—</div>
+          </div>
+          <div class="field">
+            <label>SOURCE</label>
+            <div class="value" id="src">—</div>
+          </div>
         </div>
-        <button type="submit" style="margin-top: 15px;">Save Location</button>
-    </form>
+        <p class="note">Accuracy depends on your device. Phones with GPS are usually accurate to a few meters; laptops relying on Wi-Fi positioning can be off by a city block or more, which can also throw off the street match.</p>
+      </div>
+    </div>
+  </div>
 
-    <!-- Leaflet JavaScript Engine -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-    // 1. Set default fallback coordinates (used if the user denies location access)
-    let initialLat = 6.5244;  // Example fallback (Lagos)
-    let initialLng = 3.3792;
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+  <script>
+    const btn = document.getElementById('locate');
+    const statusEl = document.getElementById('status');
+    const resultEl = document.getElementById('result');
+    const streetNameEl = document.getElementById('streetName');
+    const fullAddressEl = document.getElementById('fullAddress');
+    const latEl = document.getElementById('lat');
+    const lngEl = document.getElementById('lng');
+    const accEl = document.getElementById('acc');
+    const srcEl = document.getElementById('src');
 
-    // 2. Initialize the Leaflet Map
-    const map = L.map('map').setView([initialLat, initialLng], 13);
+    let map, marker;
 
-    // 3. Load Google Maps direct tile layer
-    L.tileLayer('http://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
-        maxZoom: 20,
-        subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-        attribution: '© Google Maps'
-    }).addTo(map);
-
-    // 4. Create the marker
-    let marker = L.marker([initialLat, initialLng], { draggable: true }).addTo(map);
-
-    function updateForm(lat, lng) {
-        document.getElementById('lat').value = lat.toFixed(6);
-        document.getElementById('lng').value = lng.toFixed(6);
+    function setStatus(msg, isError) {
+      statusEl.textContent = msg;
+      statusEl.className = 'status' + (isError ? ' error' : '');
     }
 
-    updateForm(initialLat, initialLng);
-
-    // 5. Detect User's Real-Time Location automatically
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                const userLat = position.coords.latitude;
-                const userLng = position.coords.longitude;
-
-                // Move map center and marker to the user's real location
-                map.setView([userLat, userLng], 15);
-                marker.setLatLng([userLat, userLng]);
-                updateForm(userLat, userLng);
-            },
-            (error) => {
-                console.warn("Location permission denied or unavailable. Using default coordinates.");
-            }
-        );
+    function ensureMap(lat, lon) {
+      if (!map) {
+        map = L.map('map', { zoomControl: false, attributionControl: true }).setView([lat, lon], 18);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap contributors',
+          maxZoom: 19
+        }).addTo(map);
+        marker = L.marker([lat, lon]).addTo(map);
+      } else {
+        map.setView([lat, lon], 18);
+        marker.setLatLng([lat, lon]);
+      }
+      setTimeout(() => map.invalidateSize(), 50);
     }
 
-    // Event: Update form when user drags the pin
-    marker.on('dragend', function () {
-        const position = marker.getLatLng();
-        updateForm(position.lat, position.lng);
-    });
+    // Try Nominatim at a couple of zoom levels, since narrower zoom sometimes
+    // drops the road tag on rural or newly-mapped streets.
+    async function nominatimLookup(lat, lon) {
+      for (const zoom of [18, 17, 16]) {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=${zoom}&addressdetails=1`;
+        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (!res.ok) continue;
+        const data = await res.json();
+        const street = extractStreetFromNominatim(data);
+        if (street) return { street, full: data.display_name || null, raw: data };
+      }
+      return null;
+    }
 
-    // Event: Move pin when user clicks anywhere on the map
-    map.on('click', function (e) {
-        marker.setLatLng(e.latlng);
-        updateForm(e.latlng.lat, e.latlng.lng);
+    function extractStreetFromNominatim(data) {
+      if (!data || !data.address) return null;
+      const a = data.address;
+      return a.road || a.pedestrian || a.footway || a.residential ||
+             a.cycleway || a.path || a.street || a.living_street || null;
+    }
+
+    // Fallback provider — no API key, CORS-friendly, often fills gaps Nominatim misses.
+    async function bigDataCloudLookup(lat, lon) {
+      const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const data = await res.json();
+      const street = data.street || null;
+      const parts = [data.locality, data.city, data.principalSubdivision].filter(Boolean);
+      const full = [data.street, ...parts].filter(Boolean).join(', ');
+      return street ? { street, full, raw: data } : null;
+    }
+
+    btn.addEventListener('click', () => {
+      if (!('geolocation' in navigator)) {
+        setStatus('This browser doesn\'t support location access.', true);
+        return;
+      }
+
+      btn.disabled = true;
+      resultEl.classList.remove('show');
+      setStatus('Requesting permission…');
+
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const { latitude, longitude, accuracy } = pos.coords;
+          setStatus('Looking up the street…');
+
+          latEl.textContent = latitude.toFixed(6);
+          lngEl.textContent = longitude.toFixed(6);
+          accEl.textContent = `± ${Math.round(accuracy)} m`;
+          srcEl.textContent = accuracy < 50 ? 'GPS' : 'Network / Wi-Fi';
+
+          let hit = null;
+          try {
+            hit = await nominatimLookup(latitude, longitude);
+          } catch (e) { /* try fallback below */ }
+
+          if (!hit) {
+            try {
+              hit = await bigDataCloudLookup(latitude, longitude);
+            } catch (e) { /* both failed */ }
+          }
+
+          if (hit) {
+            streetNameEl.textContent = hit.street;
+            fullAddressEl.textContent = hit.full || '';
+          } else {
+            streetNameEl.textContent = 'No street matched at these coordinates';
+            fullAddressEl.textContent = 'Try again outdoors or somewhere with a stronger signal — indoor Wi-Fi positioning is often too imprecise to match a street.';
+          }
+
+          resultEl.classList.add('show');
+          ensureMap(latitude, longitude);
+          setStatus('');
+          btn.disabled = false;
+        },
+        (err) => {
+          btn.disabled = false;
+          if (err.code === err.PERMISSION_DENIED) {
+            setStatus('Location permission was denied. Allow it in your browser settings to use this.', true);
+          } else if (err.code === err.TIMEOUT) {
+            setStatus('Location request timed out. Try again.', true);
+          } else {
+            setStatus('Could not determine location. Try again.', true);
+          }
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      );
     });
-</script>
+  </script>
+
 </body>
 </html>
