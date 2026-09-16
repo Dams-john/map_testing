@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Where Am I</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
 <style>
   :root {
     --ink: #14201d;
@@ -154,6 +153,21 @@
     border: 1px solid var(--line);
   }
 
+  #map iframe {
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
+
+  .open-in-gmaps {
+    display: inline-block;
+    margin-top: 10px;
+    font-size: 13px;
+    color: var(--teal);
+    text-decoration: none;
+    border-bottom: 1px solid var(--teal);
+  }
+
   .grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -192,7 +206,7 @@
     <div class="card__top">
       <p class="kicker">GEOLOCATION</p>
       <h1>Find the street you're standing on</h1>
-      <p class="lede">Uses your browser's location permission, then looks up the nearest street. Nothing is stored — the lookup happens live in this tab.</p>
+      <p class="lede">Uses your browser's location permission, looks up the nearest street, and drops a pin on Google Maps. Nothing is stored — everything happens live in this tab.</p>
     </div>
 
     <div class="card__body">
@@ -215,6 +229,7 @@
         </div>
 
         <div id="map"></div>
+        <a class="open-in-gmaps" id="gmapsLink" href="#" target="_blank" rel="noopener">Open this exact spot in Google Maps →</a>
 
         <div class="grid">
           <div class="field">
@@ -235,11 +250,11 @@
           </div>
         </div>
         <p class="note">Accuracy depends on your device. Phones with GPS are usually accurate to a few meters; laptops relying on Wi-Fi positioning can be off by a city block or more, which can also throw off the street match.</p>
+        <p class="note" style="margin-top:10px;padding-top:10px;">Map: Google Maps. Street name lookup: OpenStreetMap contributors.</p>
       </div>
     </div>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
   <script>
     const btn = document.getElementById('locate');
     const statusEl = document.getElementById('status');
@@ -251,27 +266,22 @@
     const lngEl = document.getElementById('lng');
     const accEl = document.getElementById('acc');
     const srcEl = document.getElementById('src');
-
-    let map, marker;
+    const mapEl = document.getElementById('map');
+    const gmapsLinkEl = document.getElementById('gmapsLink');
 
     function setStatus(msg, isError) {
       statusEl.textContent = msg;
       statusEl.className = 'status' + (isError ? ' error' : '');
     }
 
-    function ensureMap(lat, lon) {
-      if (!map) {
-        map = L.map('map', { zoomControl: false, attributionControl: true }).setView([lat, lon], 18);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap contributors',
-          maxZoom: 19
-        }).addTo(map);
-        marker = L.marker([lat, lon]).addTo(map);
-      } else {
-        map.setView([lat, lon], 18);
-        marker.setLatLng([lat, lon]);
-      }
-      setTimeout(() => map.invalidateSize(), 50);
+    // No API key needed for this — it's Google's classic free map embed
+    // (as opposed to the JS Maps API or Geocoding API, which do require a
+    // billed key). This renders Google's own tiles, with Google's own
+    // street labels drawn on them, centered tightly on the pin.
+    function showGoogleMap(lat, lon) {
+      const src = `https://www.google.com/maps?q=${lat},${lon}&z=19&output=embed`;
+      mapEl.innerHTML = `<iframe src="${src}" loading="lazy" allowfullscreen></iframe>`;
+      gmapsLinkEl.href = `https://www.google.com/maps?q=${lat},${lon}&z=19`;
     }
 
     // Nominatim's usage policy caps requests at ~1/sec — a short pause between
@@ -420,7 +430,7 @@
           }
 
           resultEl.classList.add('show');
-          ensureMap(latitude, longitude);
+          showGoogleMap(latitude, longitude);
           setStatus('');
           btn.disabled = false;
         },
