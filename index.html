@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>checking</title>
+<title>Where Am I</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
 <style>
   :root {
@@ -332,33 +332,33 @@
 
     // Last-resort fallback — instead of asking a database "what's the address at
     // this exact point" (which fails if no address was ever tagged nearby), this
-    // asks a map query "what's the nearest named road", widening the search
-    // radius until it finds one. Doesn't return a house number, since road
-    // geometries don't carry those, but almost always finds a street name.
+    // asks a map query "what's the nearest named road" across several radii at
+    // once (fewer round trips = less chance of a mid-lookup failure), then picks
+    // whichever result is physically closest. This is what guarantees a street
+    // name almost everywhere with any road network nearby.
     async function overpassLookup(lat, lon) {
-      const radii = [30, 75, 150, 300, 600];
-      for (const r of radii) {
-        const query = `[out:json][timeout:10];way(around:${r},${lat},${lon})["highway"]["name"];out tags center;`;
-        const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
-        try {
-          const res = await fetch(url);
-          if (!res.ok) continue;
-          const data = await res.json();
-          if (!data.elements || !data.elements.length) continue;
+      const query = `[out:json][timeout:20];
+        (
+          way(around:150,${lat},${lon})["highway"]["name"];
+          way(around:600,${lat},${lon})["highway"]["name"];
+          way(around:2000,${lat},${lon})["highway"]["name"];
+        );
+        out tags center;`;
+      const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data.elements || !data.elements.length) return null;
 
-          let best = null;
-          let bestDist = Infinity;
-          for (const el of data.elements) {
-            if (!el.tags || !el.tags.name || !el.center) continue;
-            const d = haversineMeters(lat, lon, el.center.lat, el.center.lon);
-            if (d < bestDist) { bestDist = d; best = el; }
-          }
-          if (best) {
-            return { street: best.tags.name, houseNumber: null, full: null, distance: Math.round(bestDist) };
-          }
-        } catch (e) { /* widen radius and try again */ }
+      let best = null;
+      let bestDist = Infinity;
+      for (const el of data.elements) {
+        if (!el.tags || !el.tags.name || !el.center) continue;
+        const d = haversineMeters(lat, lon, el.center.lat, el.center.lon);
+        if (d < bestDist) { bestDist = d; best = el; }
       }
-      return null;
+      if (!best) return null;
+      return { street: best.tags.name, houseNumber: null, full: null, distance: Math.round(bestDist) };
     }
 
     btn.addEventListener('click', () => {
@@ -404,16 +404,19 @@
             if (hit.full) {
               fullAddressEl.textContent = hit.full;
             } else if (hit.distance !== undefined) {
-              fullAddressEl.textContent = `Nearest named road, ~${hit.distance} m away — no exact address point mapped here.`;
+              fullAddressEl.textContent = hit.distance < 5
+                ? 'No exact address point mapped here — this is the road you\'re on.'
+                : `Nearest named road, ~${hit.distance} m away — no exact address point mapped right at your spot.`;
             } else {
               fullAddressEl.textContent = '';
             }
           } else {
+            // All three providers came back empty. In practice this means the
+            // lookups themselves couldn't be reached (offline, or the network
+            // is blocking these API calls) — not that no road exists nearby.
             streetNumberEl.textContent = '—';
-            streetNameEl.textContent = 'No street matched at these coordinates';
-            fullAddressEl.textContent = accuracy > 100
-              ? `Your location is only accurate to ~${Math.round(accuracy)} m, which is likely too imprecise to match a street. Try again on a device with GPS, outdoors.`
-              : 'This spot may be off the road network entirely (a field, courtyard, or building interior) with no named way nearby.';
+            streetNameEl.textContent = 'Street lookup unreachable';
+            fullAddressEl.textContent = 'Your coordinates came through fine, but none of the map-lookup services responded — check your connection and try again. Your position is still plotted on the map below.';
           }
 
           resultEl.classList.add('show');
